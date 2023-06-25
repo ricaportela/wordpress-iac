@@ -39,6 +39,15 @@ for region in $regions; do
     # Loop pelas Route Tables e exclui cada uma delas
     for rtb in $route_tables; do
       echo "Removendo Route Table $rtb"
+
+      # Desanexa todas as subnets da Route Table
+      subnets_in_rtb=$(aws ec2 describe-route-tables --region $region --route-table-ids $rtb --query 'RouteTables[*].Associations[?SubnetId!=`null`].SubnetId' --output text)
+      for subnet in $subnets_in_rtb; do
+        echo "Desanexando subnet $subnet da Route Table $rtb"
+        aws ec2 disassociate-route-table --region $region --association-id $subnet
+      done
+
+      # Exclui a Route Table
       aws ec2 delete-route-table --region $region --route-table-id $rtb
     done
     
@@ -50,7 +59,7 @@ for region in $regions; do
       echo "Removendo ACL $acl"
       aws ec2 delete-network-acl --region $region --network-acl-id $acl
     fi
-    
+
     # Exclui a VPC
     aws ec2 delete-vpc --region $region --vpc-id $vpc
   done
