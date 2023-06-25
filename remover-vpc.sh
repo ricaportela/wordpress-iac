@@ -13,17 +13,25 @@ for region in $regions; do
   # Loop pelas VPCs e exclui cada uma delas
   for vpc in $vpcs; do
     echo "Removendo VPC $vpc"
-    
-    # Obtém o Internet Gateway associado à VPC
-    igw=$(aws ec2 describe-internet-gateways --region $region --filters "Name=attachment.vpc-id,Values=$vpc" --query 'InternetGateways[*].InternetGatewayId' --output text)
 
-    # Desanexa e exclui o Internet Gateway
-    if [ -n "$igw" ]; then
-      echo "Desanexando e excluindo o Internet Gateway $igw"
-      aws ec2 detach-internet-gateway --region $region --internet-gateway-id $igw --vpc-id $vpc
-      aws ec2 delete-internet-gateway --region $region --internet-gateway-id $igw
+    # Obtém o Security Group associado à VPC
+    security_group=$(aws ec2 describe-security-groups --region $region --filters "Name=vpc-id,Values=$vpc" --query 'SecurityGroups[*].GroupId' --output text)
+
+    # Exclui o Security Group
+    if [ -n "$security_group" ]; then
+      echo "Removendo Security Group $security_group"
+      aws ec2 delete-security-group --region $region --group-id $security_group
     fi
-    
+
+    # Obtém a lista de Network ACLs
+    network_acls=$(aws ec2 describe-network-acls --region $region --filters "Name=vpc-id,Values=$vpc" --query 'NetworkAcls[*].NetworkAclId' --output text)
+
+    # Loop pelas Network ACLs e exclui cada uma delas
+    for acl in $network_acls; do
+      echo "Removendo Network ACL $acl"
+      aws ec2 delete-network-acl --region $region --network-acl-id $acl
+    done
+
     # Obtém a lista de subnets
     subnets=$(aws ec2 describe-subnets --region $region --filters "Name=vpc-id,Values=$vpc" --query 'Subnets[*].SubnetId' --output text)
 
@@ -32,7 +40,7 @@ for region in $regions; do
       echo "Removendo subnet $subnet"
       aws ec2 delete-subnet --region $region --subnet-id $subnet
     done
-    
+
     # Obtém a lista de Route Tables
     route_tables=$(aws ec2 describe-route-tables --region $region --filters "Name=vpc-id,Values=$vpc" --query 'RouteTables[*].RouteTableId' --output text)
 
@@ -50,14 +58,24 @@ for region in $regions; do
       # Exclui a Route Table
       aws ec2 delete-route-table --region $region --route-table-id $rtb
     done
-    
-    # Obtém a Default Network ACL da VPC
-    acl=$(aws ec2 describe-network-acls --region $region --filters "Name=vpc-id,Values=$vpc" "Name=isDefault,Values=true" --query 'NetworkAcls[*].NetworkAclId' --output text)
 
-    # Exclui a Default Network ACL
-    if [ -n "$acl" ]; then
-      echo "Removendo ACL $acl"
-      aws ec2 delete-network-acl --region $region --network-acl-id $acl
+    # Obtém o Internet Gateway associado à VPC
+    igw=$(aws ec2 describe-internet-gateways --region $region --filters "Name=attachment.vpc-id,Values=$vpc" --query 'InternetGateways[*].InternetGatewayId' --output text)
+
+    # Desanexa e exclui o Internet Gateway
+    if [ -n "$igw" ]; then
+      echo "Desanexando e excluindo o Internet Gateway $igw"
+      aws ec2 detach-internet-gateway --region $region --internet-gateway-id $igw --vpc-id $vpc
+      aws ec2 delete-internet-gateway --region $region --internet-gateway-id $igw
+    fi
+
+    # Obtém o Egress Only Internet Gateway associado à VPC
+    eigw=$(aws ec2 describe-egress-only-internet-gateways --region $region --filters "Name=attachment.vpc-id,Values=$vpc" --query 'EgressOnlyInternetGateways[*].EgressOnlyInternetGatewayId' --output text)
+
+    # Desanexa e exclui o Egress Only Internet Gateway
+    if [ -n "$eigw" ]; then
+      echo "Desanexando e excluindo o Egress Only Internet Gateway $eigw"
+      aws ec2 delete-egress-only-internet-gateway --region $region --egress-only-internet-gateway-id $eigw
     fi
 
     # Exclui a VPC
